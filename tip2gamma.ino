@@ -14,11 +14,11 @@ float R1= 550;    //контрольное сопротивление, +5V-R1-an
 int ResistValues[]= {0, 376, 100, 0}; //начальные сопротивления кнопок: none, up (vol+), down (vol-), mute (или нажание двух кнопок разом)
 int R2min[] = {0,0,0,0};
 int R2max[] = {0,0,0,0};
-char* ButtonNames[]= {"NaN", "Vol +", "Vol -", "Next", "Prev", "Mute"};
+char* ButtonNames[]= {"NaN", "Vol +", "Vol -", "Mute", "Next", "Prev"};
 
 float Sr=0.15;  //дисперсия (погрешность определения) сопротивления %
 int shortDelay = 20; //время задержки для долгого нажатия, ms
-int longDelay = 2000; //время задержки для долгого нажатия, ms
+int longDelay = 1500; //время задержки для долгого нажатия, ms
 
 #define LED_ON      (PORTB |=  (1<<5))
 #define LED_OFF     (PORTB &= ~(1<<5))
@@ -54,7 +54,7 @@ void send_byte(uint8_t byte){
       OUT_OFF;
       LED_OFF;
     }
-    _delay_us(444);
+    delayMicroseconds(444);
   }
 }
 
@@ -107,12 +107,12 @@ int R2Count(int Rraw){   //определить сопротивление кн�
 void learn(byte count){ //определение и сохранение сопротивлений кнопок
   
   Serial.println("Setup mode");
-  _delay_ms(300); 
+  delayMicroseconds(300); 
   LED_ON;
-  _delay_ms(1500);
+  delayMicroseconds(1500);
   LED_OFF; 
   LED_ON;
-  _delay_ms(1500);
+  delayMicroseconds(1500);
   LED_OFF; 
   for (int i=0; i<4; i++) { 
       Serial.print("Setting ");
@@ -120,9 +120,9 @@ void learn(byte count){ //определение и сохранение соп�
       Serial.println(". Hold it down");
       for (int j=0; j<i; j++) {
         LED_ON;
-        _delay_ms(500);
+        delayMicroseconds(500);
         LED_OFF;
-        _delay_ms(500);     
+        delayMicroseconds(500);     
    }
   raw= analogRead(analogPin);
   float R2= R2Count(raw);
@@ -139,35 +139,9 @@ void learn(byte count){ //определение и сохранение соп�
         Serial.println(" Ohms now. NOT set and resetted to 0!");
         Serial.println();
       }
-   _delay_ms(300); 
+   delayMicroseconds(300); 
   }
 } 
-
-
-void setup(){
-  Serial.begin(9600);
-  Serial.println("Gamma resistance remote");
-  //resistDefaults();
-  Serial.println("Send +5V to D12 for button setup");
-  DDRB  = (1<<1)|(1<<2)|(0<<4)|(1<<5); //D14 input D9, D10, LED output
-  //resistDefaults();
-  //learn(); //переобучить кнопки
-
-  //читаем сопротивления из памяти
-  Serial.println("Resistance values for buttons:");
-  for (int i=1; i<4; i++) { 
-    ResistValues[i]=resistRead(i);
-    Serial.print("R");
-    Serial.print(i);
-    Serial.print("=");
-    Serial.println(ResistValues[i]);
-  }
-
- for (int i=0; i<3; i++) { 
-    R2min[i] = ResistValues[i]*(1-Sr);
-    R2max[i] = ResistValues[i]*(1+Sr);
- }
-}
 
 void commandActivate(int button){
     if (button != 3){ //проверка на нажатие mute
@@ -188,28 +162,55 @@ void commandActivate(int button){
 int detectButton(){    //проверка нажата ли кнопка или просто наводка
   raw= analogRead(analogPin);
   float R2= R2Count(raw);
+
   int res= 0;
-  for(int i=0;i<4;i++){  //
-    if ((res > R2min[i])&&(res < R2max[i])){//проверка на соответствие сохранённым кнопкам
+  for(int i=0;i<3;i++){  //
+    if ((R2 > R2min[i])&&(R2 < R2max[i])){//проверка на соответствие сохранённым кнопкам
       res = i;
     }
-  }  
+  }   
   return res;  
 }
   
-void loop(){
-  Button_Now = detectButton;
+void setup(){
   
-  if (Button_Now != 0){
-    Pressed_Button = Button_Now; //прошлая кнопка
-    Pressed_Time = millis();
- 
-    while (Button_Now != 0){
-      Button_Now = detectButton;
-      _delay_ms(75);
+  Serial.begin(9600);
+  Serial.println("Gamma resistance remote");
+  //resistDefaults();
+  //Serial.println("Send +5V to D12 for button setup");
+  DDRB  = (1<<1)|(1<<2)|(0<<4)|(1<<5); //D14 input D9, D10, LED output
+  //resistDefaults();
+  //learn(); //переобучить кнопки
+
+  //читаем сопротивления из памяти
+  Serial.println("Resistance values for buttons:");
+  for (int i=1; i<4; i++) { 
+    ResistValues[i]=resistRead(i);
+    Serial.print("R");
+    Serial.print(i);
+    Serial.print("=");
+    Serial.println(ResistValues[i]);
+  }
+
+//определяем промежутки
+  for (int i=0; i<3; i++) { 
+    R2min[i] = ResistValues[i]*(1-Sr);
+    R2max[i] = ResistValues[i]*(1+Sr);
+ }  
+}
+
+void loop(){
+  Pressed_Button = Button_Now; //прошлая кнопка
+  Button_Now = detectButton(); //новая кнопка
+  
+  if ((Button_Now != Pressed_Button) or (millis() > Pressed_Time+longDelay)){ //если что-то поменялось или долго держим
+    if (Button_Now != 0) {            //не отпустили 
+      commandActivate(Button_Now); //запускаем команду
+      delayMicroseconds(75);  
     }
     
-    commandActivate(Pressed_Button);    
+    Pressed_Time = millis();
+     
   }  
   //Serial.println(R2);
 
